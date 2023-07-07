@@ -1,6 +1,7 @@
 #![allow(unused)]
 use std::{
     cell::RefCell,
+    cmp::Ordering,
     rc::{self, Rc},
 };
 
@@ -31,7 +32,7 @@ impl<T> Node<T> {
 
 impl<T> BinaryTree<T>
 where
-    T: PartialOrd + Copy + std::fmt::Debug,
+    T: Ord + Copy + std::fmt::Debug,
 {
     fn new() -> Self {
         Self { root: None }
@@ -73,22 +74,20 @@ where
         todo!()
     }
 
-    fn traverse(current: RcNode<T>, n: T) -> (RcNode<T>, Direction) {
+    fn traverse(current: RcNode<T>, target: T) -> (RcNode<T>, Direction) {
         let node = current.borrow();
         let current_value = node.value;
 
-        if (n < current_value) {
-            match &node.left {
-                Some(next) => BinaryTree::traverse(Rc::clone(next), n),
+        match target.cmp(&current_value) {
+            Ordering::Less => match &node.left {
+                Some(next) => BinaryTree::traverse(Rc::clone(next), target),
                 None => (Rc::clone(&current), Direction::Left),
-            }
-        } else if (n > current_value) {
-            match &node.right {
-                Some(next) => BinaryTree::traverse(Rc::clone(next), n),
+            },
+            Ordering::Greater => match &node.right {
+                Some(next) => BinaryTree::traverse(Rc::clone(next), target),
                 None => (Rc::clone(&current), Direction::Right),
-            }
-        } else {
-            (Rc::clone(&current), Direction::Equal)
+            },
+            Ordering::Equal => (Rc::clone(&current), Direction::Equal),
         }
     }
 }
