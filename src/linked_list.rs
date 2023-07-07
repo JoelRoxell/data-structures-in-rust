@@ -7,7 +7,7 @@ use std::{
 type MaybeNode<T> = Option<Rc<RefCell<Node<T>>>>;
 
 #[derive(Debug)]
-struct LinkedList<T: Copy> {
+pub struct LinkedList<T: Copy> {
     head: MaybeNode<T>,
     tail: MaybeNode<T>,
     len: usize,
@@ -34,7 +34,7 @@ impl<T: Copy> Node<T> {
     }
 }
 
-struct NodeIter<T: Copy> {
+pub struct NodeIter<T: Copy> {
     cursor: MaybeNode<T>,
 }
 
@@ -55,7 +55,7 @@ impl<T: Copy> Iterator for NodeIter<T> {
 }
 
 impl<T: Copy> LinkedList<T> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             head: None,
             tail: None,
@@ -63,7 +63,7 @@ impl<T: Copy> LinkedList<T> {
         }
     }
 
-    fn iter(&self) -> NodeIter<T> {
+    pub fn iter(&self) -> NodeIter<T> {
         self.head
             .as_ref()
             .expect("List does not have a head")
@@ -71,7 +71,7 @@ impl<T: Copy> LinkedList<T> {
             .iter()
     }
 
-    fn append(&mut self, value: T) {
+    pub fn append(&mut self, value: T) {
         if let Some(d) = self.tail.as_mut() {
             let old_tail = self.tail.take();
             let new_tail = Some(Rc::new(RefCell::new(Node::new(value, None))));
@@ -85,14 +85,52 @@ impl<T: Copy> LinkedList<T> {
             self.tail = new_node.clone();
             self.head = new_node;
         }
+
+        self.len += 1;
     }
 
-    fn insert(value: T, index: usize) {
-        todo!()
+    pub fn remove(&mut self, index: usize) -> Option<T> {
+        let mut current = Some(Rc::clone(self.head.as_ref().unwrap()));
+        let mut prev: MaybeNode<T> = None;
+
+        for i in 0..self.len() {
+            if i == index {
+                let current = current.take().expect("Failed to take current node");
+                let mut current = current.borrow_mut();
+
+                if let Some(next) = current.next.take() {
+                    match prev {
+                        Some(prev) => {
+                            let mut prev = prev.borrow_mut();
+                            prev.next = Some(next);
+                        }
+                        None => self.head = Some(next),
+                    }
+
+                    // TODO: update tail if necessary
+
+                    self.len -= 1;
+                }
+
+                return Some(current.value);
+            }
+
+            let container = current.unwrap();
+            let node = container.borrow();
+
+            prev = Some(Rc::clone(&container));
+
+            match &node.next {
+                Some(n) => current = Some(Rc::clone(n)),
+                None => break,
+            }
+        }
+
+        None
     }
 
-    fn push(value: T, index: usize) {
-        todo!()
+    pub fn len(&self) -> usize {
+        self.len
     }
 }
 
@@ -117,4 +155,25 @@ fn test_node_iter() {
     for i in list.iter() {
         println!("{}", i);
     }
+}
+
+#[test]
+fn test_linked_list_remove() {
+    let mut list = LinkedList::new();
+
+    list.append(1);
+    list.append(2);
+    list.append(3);
+    list.append(4);
+    list.append(5);
+
+    let ele = list.remove(0).unwrap();
+
+    assert_eq!(ele, 1);
+    assert_eq!(list.len(), 4);
+
+    let ele = list.remove(2).unwrap();
+
+    assert_eq!(ele, 4);
+    assert_eq!(list.len(), 3);
 }
