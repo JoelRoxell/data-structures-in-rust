@@ -10,13 +10,13 @@ struct Node<T> {
 
 /// Fifo
 #[derive(Debug)]
-struct Queue<T: Copy> {
+struct Queue<T: Copy + PartialEq> {
     list: LinkedList<T>,
 }
 
 impl<T> Queue<T>
 where
-    T: Copy,
+    T: Copy + PartialEq,
 {
     pub fn new() -> Self {
         Self {

@@ -2,15 +2,16 @@
 use std::{
     cell::RefCell,
     cmp::Ordering,
-    rc::{self, Rc},
+    fmt::Debug,
+    rc::{self, Rc, Weak},
 };
 
 type OptionalRcNode<T> = Option<RcNode<T>>;
 type RcNode<T> = Rc<RefCell<Node<T>>>;
 
-#[derive(Debug)]
 struct BinaryTree<T> {
     root: OptionalRcNode<T>,
+    n: usize,
 }
 
 #[derive(Debug)]
@@ -18,6 +19,7 @@ struct Node<T> {
     pub left: OptionalRcNode<T>,
     pub right: OptionalRcNode<T>,
     pub value: T,
+    pub parent: Option<Weak<RefCell<Node<T>>>>,
 }
 
 impl<T> Node<T> {
@@ -26,6 +28,7 @@ impl<T> Node<T> {
             value: v,
             left: None,
             right: None,
+            parent: None,
         }))
     }
 }
@@ -35,33 +38,73 @@ where
     T: Ord + Copy + std::fmt::Debug,
 {
     fn new() -> Self {
-        Self { root: None }
+        Self { root: None, n: 0 }
+    }
+
+    pub fn len(&self) -> usize {
+        self.n
     }
 
     pub fn insert(&mut self, n: T) {
         if (self.root.is_none()) {
             self.root = Some(Node::new(n));
+            self.n += 1;
 
             return;
         }
 
         let head = self.root.as_ref().unwrap();
-        let (parent, pos) = BinaryTree::traverse(Rc::clone(head), n);
-        let new_node = Some(Node::new(n));
+        let (parent, branch_direction) = BinaryTree::traverse(n, Rc::clone(head));
+        let new_node = Node::new(n);
 
-        match pos {
-            Direction::Left => parent.borrow_mut().left = new_node,
-            Direction::Right => parent.borrow_mut().right = new_node,
-            Direction::Equal => todo!(),
+        new_node.borrow_mut().parent = Some(Rc::downgrade(&parent));
+
+        match branch_direction {
+            Direction::Left => parent.borrow_mut().left = Some(new_node),
+            Direction::Right => parent.borrow_mut().right = Some(new_node),
+            Direction::Equal => todo!("node duplicate count is not yet supported"),
         }
+
+        self.n += 1;
     }
 
+    fn remove(&mut self, n: T) -> Option<T> {
+        let target = match self.search(n) {
+            Some(n) => n,
+            None => return None,
+        };
+
+        let target = target.borrow();
+
+        // Remove parent link if it exist
+        target.parent.as_ref().map(|parent| {
+            parent.upgrade().map(|p| {
+                let mut parent_container = p.borrow_mut();
+
+                if let Some(left_node) = parent_container.left.as_ref() {
+                    if left_node.borrow().value == n {
+                        parent_container.left = None;
+                    }
+                } else if let Some(right_node) = parent_container.right.as_ref() {
+                    if right_node.borrow().value == n {
+                        parent_container.right = None;
+                    }
+                }
+            })
+        });
+
+        // TODO: restructure leafs
+
+        Some(target.value)
+    }
+
+    /// Finds given element from the tree if found
     fn search(&self, n: T) -> Option<RcNode<T>> {
         let root = match self.root.as_ref() {
             Some(o) => o,
             None => return None,
         };
-        let (container, direction) = BinaryTree::traverse(Rc::clone(root), n);
+        let (container, direction) = BinaryTree::traverse(n, Rc::clone(root));
 
         match direction {
             Direction::Left => None,
@@ -74,21 +117,51 @@ where
         todo!()
     }
 
-    fn traverse(current: RcNode<T>, target: T) -> (RcNode<T>, Direction) {
+    /// Returns the current node that should be the parent of `target` & which direction to where
+    /// it should be placed.
+    fn traverse(target: T, current: RcNode<T>) -> (RcNode<T>, Direction) {
         let node = current.borrow();
         let current_value = node.value;
 
         match target.cmp(&current_value) {
             Ordering::Less => match &node.left {
-                Some(next) => BinaryTree::traverse(Rc::clone(next), target),
+                Some(next) => BinaryTree::traverse(target, Rc::clone(next)),
                 None => (Rc::clone(&current), Direction::Left),
             },
             Ordering::Greater => match &node.right {
-                Some(next) => BinaryTree::traverse(Rc::clone(next), target),
+                Some(next) => BinaryTree::traverse(target, Rc::clone(next)),
                 None => (Rc::clone(&current), Direction::Right),
             },
             Ordering::Equal => (Rc::clone(&current), Direction::Equal),
         }
+    }
+
+    /// Find tallest branch by searching through the entire tree
+    fn depth(current: &RcNode<T>, depth: usize, mut max_depth: Rc<RefCell<usize>>) {
+        {
+            let mut d = max_depth.borrow_mut();
+
+            if depth > *d {
+                *d = depth;
+            }
+        }
+
+        let current = current.borrow();
+
+        if let Some(left) = &current.left {
+            BinaryTree::depth(left, depth + 1, Rc::clone(&max_depth));
+        }
+
+        if let Some(right) = &current.right {
+            BinaryTree::depth(right, depth + 1, Rc::clone(&max_depth));
+        }
+    }
+}
+
+impl<T> Debug for BinaryTree<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO: build the str structure to represent the binary tree.
+        f.write_str("This should be the binary tree presentation")
     }
 }
 
@@ -114,6 +187,8 @@ mod tests {
         bt.insert(3);
         bt.insert(2);
         bt.insert(4);
+
+        println!("{:?}", bt);
     }
 
     #[test]
@@ -128,5 +203,36 @@ mod tests {
         let d = d.unwrap();
 
         assert_eq!(d.borrow().value, 3);
+    }
+
+    #[test]
+    fn test_tree_rm() {
+        let mut a = BinaryTree::new();
+
+        a.insert(1);
+        a.insert(2);
+        a.insert(3);
+
+        assert_eq!(a.len(), 3);
+
+        a.remove(2);
+        println!("{:?}", a);
+    }
+
+    #[test]
+    fn test_tree_depth() {
+        let mut a = BinaryTree::new();
+
+        a.insert(2);
+        a.insert(1);
+        a.insert(3);
+        a.insert(4);
+        a.insert(5);
+
+        let res = Rc::new(RefCell::new(0));
+
+        BinaryTree::depth(&a.root.unwrap(), 0, Rc::clone(&res));
+
+        assert_eq!(*res.borrow(), 3);
     }
 }

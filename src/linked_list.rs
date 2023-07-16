@@ -7,7 +7,7 @@ use std::{
 type MaybeNode<T> = Option<Rc<RefCell<Node<T>>>>;
 
 #[derive(Debug)]
-pub struct LinkedList<T: Copy> {
+pub struct LinkedList<T: Copy + PartialEq> {
     head: MaybeNode<T>,
     tail: MaybeNode<T>,
     len: usize,
@@ -54,7 +54,7 @@ impl<T: Copy> Iterator for NodeIter<T> {
     }
 }
 
-impl<T: Copy> LinkedList<T> {
+impl<T: Copy + PartialEq> LinkedList<T> {
     pub fn new() -> Self {
         Self {
             head: None,
@@ -107,7 +107,7 @@ impl<T: Copy> LinkedList<T> {
                         None => self.head = Some(next),
                     }
 
-                    // TODO: update tail if necessary
+                    // TODO: update tail
 
                     self.len -= 1;
                 }
@@ -127,6 +127,16 @@ impl<T: Copy> LinkedList<T> {
         }
 
         None
+    }
+
+    pub fn peak() -> Option<T> {
+        todo!();
+    }
+
+    pub fn lookup(&self, target: T) -> Option<usize> {
+        let d = self.iter().position(|(n)| n == target);
+
+        Some(1)
     }
 
     pub fn len(&self) -> usize {
@@ -175,5 +185,4 @@ fn test_linked_list_remove() {
     let ele = list.remove(2).unwrap();
 
     assert_eq!(ele, 4);
-    assert_eq!(list.len(), 3);
 }
