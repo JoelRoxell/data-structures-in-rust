@@ -35,7 +35,7 @@ impl<T> Node<T> {
 
 impl<T> BinaryTree<T>
 where
-    T: Ord + Copy + std::fmt::Debug,
+    T: Ord + Copy + std::fmt::Debug + std::fmt::Display,
 {
     fn new() -> Self {
         Self { root: None, n: 0 }
@@ -136,7 +136,7 @@ where
         }
     }
 
-    /// Find tallest branch by searching through the entire tree
+    /// Find longest branch by searching through the entire tree
     fn depth(current: &RcNode<T>, depth: usize, mut max_depth: Rc<RefCell<usize>>) {
         {
             let mut d = max_depth.borrow_mut();
@@ -156,6 +156,49 @@ where
             BinaryTree::depth(right, depth + 1, Rc::clone(&max_depth));
         }
     }
+
+    /// Determine node print sequence
+    fn print_lvls(current_level: Vec<PrintableNode<T>>) {
+        let mut output = String::new();
+        let mut next_level = vec![];
+        let spacing = 5;
+
+        for (i, item) in current_level.iter().enumerate() {
+            match item {
+                PrintableNode::Node(node, padding) => {
+                    let current = node.borrow();
+                    let d = format!(
+                        "{:padding$}",
+                        current.value,
+                        padding = padding - i * spacing
+                    );
+
+                    output.push_str(&d);
+
+                    if let Some(left) = &current.left {
+                        next_level.push(PrintableNode::Node(Rc::clone(left), padding - spacing));
+                    }
+
+                    if let Some(right) = &current.right {
+                        next_level.push(PrintableNode::Node(Rc::clone(right), padding + spacing));
+                    }
+                }
+
+                PrintableNode::Empty => {}
+            }
+        }
+
+        println!("{}", output);
+
+        if !next_level.is_empty() {
+            BinaryTree::print_lvls(next_level)
+        }
+    }
+}
+
+enum PrintableNode<T> {
+    Node(RcNode<T>, usize),
+    Empty,
 }
 
 impl<T> Debug for BinaryTree<T> {
@@ -177,6 +220,8 @@ mod tests {
     use std::{cell::RefCell, rc::Rc};
 
     use crate::binary_tree::{BinaryTree, Node};
+
+    use super::PrintableNode;
 
     #[test]
     fn test_tree_insert() {
@@ -234,5 +279,18 @@ mod tests {
         BinaryTree::depth(&a.root.unwrap(), 0, Rc::clone(&res));
 
         assert_eq!(*res.borrow(), 3);
+    }
+
+    #[test]
+    fn test_binary_print_lvl() {
+        let mut a = BinaryTree::new();
+
+        a.insert(2);
+        a.insert(1);
+        a.insert(3);
+
+        let start = vec![PrintableNode::Node(a.root.unwrap(), 10)];
+
+        BinaryTree::print_lvls(start)
     }
 }
